@@ -855,9 +855,6 @@ El resultado confirma que los tres módulos funcionan de forma integrada y que e
 | `python3` no reconocido en Windows (abre la Microsoft Store) | Alias de la Store de Windows, Python no instalado todavía | Instalar Python desde [python.org](https://www.python.org/downloads/) usando el Python Install Manager (`py install 3.13`) |
 | Advertencia de rutas largas (260 caracteres) durante la instalación | Límite histórico de Windows (MS-DOS) | Aceptar la habilitación de rutas largas que ofrece el instalador; requiere reiniciar la PC |
 | `venv\Scripts\Activate.ps1` no se puede cargar: "la ejecución de scripts está deshabilitada" | Política de ejecución de PowerShell bloquea scripts `.ps1` sin firma | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`. Se eligió `RemoteSigned` (no `Unrestricted`) porque permite scripts locales sin firma, pero sigue exigiendo firma digital para scripts descargados de internet — el balance correcto para una materia de seguridad |
-| `git` no reconocido como comando | Git no estaba instalado (computadora nueva) | `winget install --id Git.Git -e --source winget`, y abrir una terminal nueva para que tome el cambio de PATH |
-| Cambios de PATH no se reflejan en la terminal actual | Windows solo actualiza el PATH en terminales nuevas | Cerrar y reabrir la terminal (o VS Code completo) después de instalar Python, Git, o cambiar el PATH |
-| `git config` quedó con valores de ejemplo ("Tu Nombre", "tu-email@ejemplo.com") | Se copiaron los comandos sin reemplazar los placeholders | Volver a correr `git config --global user.name`/`user.email` con los datos reales; sobrescribe el valor anterior sin necesidad de deshacer nada |
 
 ---
 
