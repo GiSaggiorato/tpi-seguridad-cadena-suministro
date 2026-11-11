@@ -66,7 +66,8 @@ def mostrar_scripts_sospechosos(hallazgos):
         return
 
     tabla = Table(title="Scripts de instalación sospechosos")
-    tabla.add_column("Script", style="bold")
+    tabla.add_column("Paquete", style="bold")
+    tabla.add_column("Script")
     tabla.add_column("Riesgo")
     tabla.add_column("Patrones detectados")
     tabla.add_column("Contenido")
@@ -74,6 +75,7 @@ def mostrar_scripts_sospechosos(hallazgos):
     for item in hallazgos:
         color = COLOR_POR_RIESGO.get(item["riesgo"], "white")
         tabla.add_row(
+            item["paquete"],
             item["script"],
             f"[{color}]{item['riesgo']}[/{color}]",
             ", ".join(item["patrones_detectados"]),
