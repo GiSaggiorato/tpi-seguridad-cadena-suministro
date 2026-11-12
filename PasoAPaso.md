@@ -7,8 +7,6 @@
 - **Grupo:** Adragna Jimena Sofía · Gomez Alameda Romina Abigail · Micheli Genoves · Saggiorato Gina
 - **Exposición oral:** viernes 13/11/2026
 
-Este documento registra, paso a paso, el desarrollo de la herramienta desde el entorno de trabajo hasta la primera versión funcional (Pasos 1 a 10). Las mejoras acordadas para una segunda etapa (extensión a `node_modules`, más patrones de secretos, carga por ZIP/Git, interfaz de escritorio, etc.) se documentan aparte.
-
 ---
 
 ## Plan general

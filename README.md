@@ -6,8 +6,6 @@ Herramienta de línea de comandos que analiza un proyecto antes de que llegue a 
 2. **Secretos expuestos** — busca, mediante expresiones regulares, credenciales hardcodeadas (API keys, cadenas de conexión, tokens) en el código fuente.
 3. **Scripts de instalación sospechosos** — analiza los scripts `preinstall`/`install`/`postinstall` del `package.json` en busca de patrones de riesgo (descargas de red, ejecución de código dinámico, ofuscación).
 
-> **Estado del proyecto:** versión funcional inicial (Pasos 1 a 9 del desarrollo). Las mejoras planificadas para la entrega final se detallan en la sección [Próximos pasos](#próximos-pasos).
-
 ---
 
 ## Contexto académico
@@ -108,5 +106,3 @@ tpi-seguridad-cadena-suministro/
 - El análisis de scripts de instalación evalúa únicamente el `package.json` raíz del proyecto, no los de sus dependencias dentro de `node_modules/`.
 
 ---
-
-*README provisorio — se actualizará una vez incorporadas las mejoras de la segunda etapa.*
