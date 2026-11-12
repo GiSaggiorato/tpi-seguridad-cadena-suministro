@@ -48,7 +48,9 @@ PATRONES_SECRETOS = {
     ),
 }
 
-CARPETAS_A_IGNORAR = {"node_modules", "venv", ".venv", ".git", "dist", "build", "__pycache__"}
+CARPETAS_A_IGNORAR = {
+    "node_modules", "venv", ".venv", ".git", "dist", "build", "__pycache__", ".next", "coverage"
+}
 
 EXTENSIONES_A_ANALIZAR = {
     ".js", ".ts", ".jsx", ".tsx", ".py", ".json", ".yml", ".yaml", ".txt", ".md",
@@ -125,7 +127,7 @@ def buscar_secretos_en_archivo(ruta_archivo, ruta_base=None):
                             "tipo": nombre_patron,
                             "valor": enmascarar(coincidencia.group(0).strip()),
                         })
-    except (PermissionError, OSError):
+    except (UnicodeDecodeError, PermissionError, OSError):
         pass
 
     return hallazgos

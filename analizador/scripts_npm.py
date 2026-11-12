@@ -5,11 +5,14 @@ import os
 SCRIPTS_DE_INSTALACION = {"preinstall", "install", "postinstall"}
 
 PATRONES_DE_RIESGO = {
-    "Descarga de red": re.compile(r"\b(curl|wget|fetch)\b"),
-    "Ejecución de código dinámico": re.compile(r"\beval\s*\("),
-    "Pipe a intérprete de comandos": re.compile(r"\|\s*(bash|sh|zsh|cmd|powershell)\b"),
-    "Ejecución de binario descargado": re.compile(r"chmod\s+\+x"),
+    "Descarga de red": re.compile(r"\b(curl|wget|fetch|invoke-webrequest|iwr)\b", re.IGNORECASE),
+    "Ejecución de código dinámico": re.compile(r"\b(eval|Function)\s*\("),
+    "Pipe a intérprete de comandos": re.compile(r"\|\s*(bash|sh|zsh|cmd|powershell|pwsh|node|python|python3)\b", re.IGNORECASE),
+    "Ejecución de binario/cambio de permisos": re.compile(r"chmod\s+(\+x|[0-7]{3})"),
     "Codificación/ofuscación": re.compile(r"\b(base64|atob|Buffer\.from)\b"),
+    "Shell reversa / Redirección de red": re.compile(r"(\bnc\b|\bnetcat\b|/dev/tcp/|bash\s+-i)", re.IGNORECASE),
+    "Ejecución de subprocesos en Node inline": re.compile(r"node\s+-e\s+.*child_process", re.IGNORECASE),
+    "Acceso a archivos/variables sensibles": re.compile(r"(\.ssh/|/etc/passwd|/etc/shadow|\.npmrc|process\.env)", re.IGNORECASE),
 }
 
 
