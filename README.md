@@ -1,112 +1,115 @@
-# Analizador de cadena de suministro de software
+# Analizador de Seguridad en la Cadena de Suministro
 
-Herramienta de línea de comandos que analiza un proyecto antes de que llegue a producción, detectando tres de los vectores de ataque más frecuentes en incidentes de cadena de suministro de software:
+**Trabajo Práctico Integrador (TPI) — Seguridad en el Desarrollo de Software (Curso 4K2)**  
+**Universidad Tecnológica Nacional — Facultad Regional Córdoba (UTN FRC)**
 
-1. **Dependencias vulnerables** — consulta la API pública de [OSV.dev](https://osv.dev) para detectar versiones con CVEs conocidos.
-2. **Secretos expuestos** — busca, mediante expresiones regulares, credenciales hardcodeadas (API keys, cadenas de conexión, tokens) en el código fuente.
-3. **Scripts de instalación sospechosos** — analiza los scripts `preinstall`/`install`/`postinstall` del `package.json` en busca de patrones de riesgo (descargas de red, ejecución de código dinámico, ofuscación).
-
-> **Estado del proyecto:** versión funcional inicial (Pasos 1 a 9 del desarrollo). Las mejoras planificadas para la entrega final se detallan en la sección [Próximos pasos](#próximos-pasos).
+* **Docentes:** Ing. Barrionuevo, Ileana · Ing. Parisi, Germán · Ing. Sampieri, Matías
+* **Integrantes:**
+  * [94269] ADRAGNA, Jimena Sofía
+  * [85296] GOMEZ ALAMEDA, Romina Abigail
+  * [78493] MICHELI, Genoves
+  * [95794] SAGGIORATO, Gina
 
 ---
 
-## Contexto académico
+## Descripción
 
-- **Materia:** Seguridad en el Desarrollo de Software — 4K2
-- **Institución:** UTN Facultad Regional Córdoba — Ingeniería en Sistemas de Información
-- **Docentes:** Ing. Barrionuevo Ileana, Ing. Parisi Germán, Ing. Sampieri Matias
-- **Grupo:** Adragna Jimena Sofía · Gomez Alameda Romina Abigail · Micheli Genoves · Saggiorato Gina
-- **Entrega:** Trabajo Práctico Integrador (TPI) — exposición oral 13/11/2026
+Herramienta de línea de comandos para el análisis estático (SAST) y de composición de software (SCA) que audita un proyecto antes de su paso a producción, detectando tres de los vectores de ataque más frecuentes en la cadena de suministro de software:
 
-## Por qué Python
+1. **Dependencias con vulnerabilidades conocidas:** Analiza `package.json` (`dependencies` y `devDependencies`), resuelve la versión exacta instalada en `node_modules` cuando está disponible y consulta en tiempo real la API pública **OSV (`api.osv.dev`)** para identificar CVEs/GHSAs y su severidad máxima (`CRITICAL`, `HIGH`, `MODERATE`, `LOW`).
+2. **Secretos y credenciales expuestas:** Recorre los archivos del proyecto aplicando 14 expresiones regulares curadas (basadas en reglas públicas de *Gitleaks*) para detectar claves de AWS, Google Cloud, Stripe, GitHub, GitLab, tokens de npm (`.npmrc`), Slack Webhooks, tokens JWT, claves privadas criptográficas (`.pem`) y cadenas de conexión con credenciales (`.env`, `.js`, `.ts`, `.yml`, etc.).
+3. **Scripts de instalación sospechosos en npm:** Audita los scripts de ciclo de vida (`preinstall`, `install`, `postinstall`) tanto en el `package.json` raíz como en las dependencias directas dentro de `node_modules/` (incluyendo paquetes con *scope* `@org/paquete`), detectando descargas de red, ejecución dinámica (`eval`), pipes a intérpretes de comandos (`| bash`) y ofuscación (`base64`, `Buffer.from`).
 
-Se eligió Python (sobre la alternativa Node.js, también permitida por la propuesta) porque:
-- `requests` simplifica las consultas HTTP a la API de OSV frente a alternativas nativas más verbosas.
-- `rich` permite una salida en consola prolija (tablas, colores, paneles) con muy poco código.
-- `argparse`, incluido en el lenguaje, cubre las necesidades de la CLI sin sumar dependencias innecesarias — menos dependencias externas implica menor superficie de ataque.
+---
 
-## Requisitos
+## Medidas de Ciberseguridad Implementadas
 
-- Python 3.9 o superior
-- pip
+Dado que el analizador inspecciona proyectos de terceros potencialmente maliciosos, fue diseñado bajo principios de **defensa en profundidad**:
 
-## Instalación
+* **Análisis 100% Estático:** Nunca se ejecuta código del proyecto analizado ni se invoca `npm install` o `node`. Todos los archivos se abren exclusivamente en modo lectura de texto.
+* **Aislamiento en Carpetas Temporales (`tempfile.TemporaryDirectory`):** Los archivos `.zip` y los repositorios Git remotos se extraen o clonan en directorios temporales del sistema operativo que se eliminan automáticamente al finalizar.
+* **Prevención de *Zip Slip* (Path Traversal):** Verificación canónica de rutas (`os.path.realpath`) antes de extraer cada miembro de un archivo ZIP.
+* **Mitigación de *Zip Bomb*:** Límite estricto en la cantidad de archivos y en el tamaño total descomprimido permitido.
+* **Prevención de *Command / Argument Injection* en Git:** Restricción exclusiva al esquema `https://`, rechazo de valores que inicien con `-` y ejecución mediante `subprocess.run` con lista de argumentos (`shell=False`), clonado superficial (`--depth 1`), desactivación de prompts interactivos (`GIT_TERMINAL_PROMPT=0`) y *timeout* explícito.
+* **Prevención de *ReDoS* (*Regular Expression Denial of Service*):** Expresiones regulares libres de cuantificadores anidados ambiguos y acotación de longitud de línea evaluada.
+* **Enmascaramiento de Secretos (*Data Masking*):** Los hallazgos muestran únicamente un prefijo de 4 caracteres (`sk_t************`) para evitar que el propio reporte filtre credenciales reales.
+* **Prevención de XSS y Política CSP en Reportes HTML:** Escape sistemático con `html.escape()` y cabecera `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">`.
 
-```bash
-git clone <url-del-repositorio>
-cd tpi-seguridad-cadena-suministro
+---
 
-python -m venv venv
+## Estructura del Proyecto
 
-# Windows (PowerShell)
-venv\Scripts\Activate.ps1
-# Mac/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-## Uso
-
-```bash
-python main.py <ruta-al-proyecto-a-analizar>
-```
-
-**Ejemplo:**
-
-```bash
-python main.py ./proyecto_ejemplo
-```
-
-Ver la ayuda completa de opciones:
-
-```bash
-python main.py --help
-```
-
-### Código de salida
-
-El programa devuelve el código de salida `1` si encuentra hallazgos críticos (cualquier secreto expuesto, dependencias con severidad HIGH/CRITICAL, o scripts con riesgo "alto"), y `0` en caso contrario — pensado para simular el bloqueo de un pipeline de CI/CD.
-
-## Estructura del proyecto
-
-```
+```text
 tpi-seguridad-cadena-suministro/
-├── main.py                    # Punto de entrada (CLI)
-├── requirements.txt
+├── main.py                        # Punto de entrada (Modo Interactivo y CLI para CI/CD)
+├── requirements.txt               # Dependencias externas mínimas (requests y rich)
+├── README.md                      # Documentación general e instrucciones de uso
+├── PasoAPaso.md                   # Guía detallada de construcción y decisiones técnicas
 ├── analizador/
-│   ├── dependencias.py        # Lectura de package.json + consulta a OSV
-│   ├── secretos.py            # Detección de credenciales expuestas (regex)
-│   ├── scripts_npm.py         # Análisis de scripts de instalación
-│   └── reporte.py             # Salida en consola con rich
-└── proyecto_ejemplo/          # Proyecto de prueba con casos conocidos
+│   ├── __init__.py
+│   ├── dependencias.py            # Consulta de vulnerabilidades en la API OSV
+│   ├── secretos.py                # Detección de credenciales con regex y enmascaramiento
+│   ├── scripts_npm.py             # Auditoría de scripts en raíz y node_modules/
+│   ├── fuentes.py                 # Extracción segura de ZIP y clonado seguro de Git
+│   ├── reporte.py                 # Salida en terminal con tablas y colores (rich)
+│   └── reporte_html.py            # Exportación a HTML estático con protección XSS/CSP
+├── proyecto_ejemplo/              # Proyecto de prueba con vulnerabilidades controladas
+└── pruebas/
+    └── test_analizador.py         # Suite de 17 pruebas unitarias y de seguridad
 ```
-
-## Dependencias
-
-| Librería | Uso |
-|---|---|
-| [`requests`](https://pypi.org/project/requests/) | Consultas HTTP a la API de OSV |
-| [`rich`](https://pypi.org/project/rich/) | Tablas, colores y paneles en la salida de consola |
-
-## Caso de prueba incluido
-
-`proyecto_ejemplo/` contiene un `package.json` con una dependencia vulnerable real (`lodash@4.17.15`, con 5 CVEs conocidos en OSV) y un script `postinstall` malicioso de ejemplo, además de un `config.js` con tres tipos de secretos expuestos — pensado para demostrar las tres funcionalidades en una sola ejecución.
-
-## Próximos pasos
-
-- Extender el análisis de scripts de instalación a los `package.json` dentro de `node_modules/` (no solo el raíz del proyecto).
-- Ampliar la cobertura de patrones de detección de secretos.
-- Incorporar un proyecto de ejemplo más completo y un caso de estudio sobre un proyecto Node.js real (OWASP Juice Shop).
-- Permitir cargar el proyecto a analizar por archivo ZIP o URL de repositorio Git.
-- Exportar el reporte a un archivo HTML estático.
-- Evaluar una interfaz de escritorio como capa opcional sobre la CLI actual.
-
-## Limitaciones conocidas
-
-- El análisis de dependencias y de scripts de instalación solo soporta proyectos npm (`package.json`); no analiza `requirements.txt` de Python en esta versión.
-- El análisis de scripts de instalación evalúa únicamente el `package.json` raíz del proyecto, no los de sus dependencias dentro de `node_modules/`.
 
 ---
 
-*README provisorio — se actualizará una vez incorporadas las mejoras de la segunda etapa.*
+## Requisitos e Instalación
+
+1. Crear y activar el entorno virtual (Windows PowerShell):
+   ```powershell
+   python -m venv venv
+   venv\Scripts\Activate.ps1
+   ```
+2. Instalar las dependencias:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Formas de Uso
+
+### 1. Modo Interactivo (Asistente en consola + Selector de archivos de Windows)
+Ejecutar sin argumentos para abrir el menú interactivo paso a paso:
+```powershell
+python main.py
+```
+
+### 2. Modo Línea de Comandos (Para automatización y pipelines CI/CD)
+* **Analizar una carpeta local:**
+  ```powershell
+  python main.py ./proyecto_ejemplo
+  ```
+* **Analizar y exportar reporte HTML:**
+  ```powershell
+  python main.py ./proyecto_ejemplo --html reporte.html
+  ```
+* **Analizar un archivo comprimido `.zip`:**
+  ```powershell
+  python main.py --zip proyecto.zip --html reporte.html
+  ```
+* **Analizar un repositorio Git público (ej. OWASP Juice Shop):**
+  ```powershell
+  python main.py --git-url [https://github.com/juice-shop/juice-shop](https://github.com/juice-shop/juice-shop) --html juice.html
+  ```
+
+### Códigos de salida (Exit Codes)
+* `0`: Análisis finalizado sin hallazgos críticos.
+* `1`: Se detectaron hallazgos críticos (permite bloquear un pipeline de CI/CD).
+* `2`: Error en la fuente de entrada (ruta inexistente, ZIP inválido o URL rechazada).
+
+---
+
+## Ejecución de Pruebas Automatizadas
+
+Para ejecutar la suite de 17 tests unitarios y de seguridad:
+```powershell
+python -m unittest discover -s pruebas -t . -v
+```

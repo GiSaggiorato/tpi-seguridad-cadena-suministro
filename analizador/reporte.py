@@ -1,5 +1,6 @@
 from rich.console import Console
 from rich.table import Table
+from rich.markup import escape
 from rich.panel import Panel
 
 console = Console()
@@ -30,8 +31,8 @@ def mostrar_dependencias_vulnerables(hallazgos):
     for item in hallazgos:
         color = COLOR_POR_RIESGO.get(item["severidad_maxima"], "white")
         tabla.add_row(
-            item["paquete"],
-            item["version"],
+            escape(item["paquete"]),
+            escape(item["version"]),
             str(item["cantidad"]),
             f"[{color}]{item['severidad_maxima']}[/{color}]",
             ", ".join(item["ids"])
@@ -39,6 +40,19 @@ def mostrar_dependencias_vulnerables(hallazgos):
 
     console.print(tabla)
     console.print()
+
+def mostrar_dependencias_omitidas(omitidas):
+    if not omitidas:
+        return
+    tabla = Table(title="Dependencias no analizadas")
+    tabla.add_column("Paquete", style="bold")
+    tabla.add_column("Versión")
+    tabla.add_column("Motivo")
+    for item in omitidas:
+        tabla.add_row(escape(item["paquete"]), escape(item["version"]), item["motivo"])
+    console.print(tabla)
+    console.print()
+
 
 def mostrar_secretos_expuestos(hallazgos):
     if not hallazgos:
@@ -49,12 +63,14 @@ def mostrar_secretos_expuestos(hallazgos):
     tabla.add_column("Archivo", style="bold")
     tabla.add_column("Línea")
     tabla.add_column("Tipo")
+    tabla.add_column("Valor (enmascarado)")
 
     for item in hallazgos:
         tabla.add_row(
-            item["archivo"],
+            escape(item["archivo"]),
             str(item["linea"]),
-            f"[red]{item['tipo']}[/red]"
+            f"[red]{item['tipo']}[/red]",
+            escape(item.get("valor", ""))
         )
 
     console.print(tabla)
@@ -75,15 +91,23 @@ def mostrar_scripts_sospechosos(hallazgos):
     for item in hallazgos:
         color = COLOR_POR_RIESGO.get(item["riesgo"], "white")
         tabla.add_row(
-            item["paquete"],
-            item["script"],
+            escape(item["paquete"]),
+            escape(item["script"]),
             f"[{color}]{item['riesgo']}[/{color}]",
             ", ".join(item["patrones_detectados"]),
-            item["contenido"]
+            escape(item["contenido"])
         )
 
     console.print(tabla)
     console.print()
+
+def hay_hallazgos_criticos(dependencias, secretos, scripts):
+    return (
+        len(secretos) > 0
+        or any(item["riesgo"] == "alto" for item in scripts)
+        or any(item["severidad_maxima"] in ("HIGH", "CRITICAL") for item in dependencias)
+    )
+
 
 def mostrar_resumen_y_calcular_salida(dependencias, secretos, scripts):
     """
@@ -96,11 +120,7 @@ def mostrar_resumen_y_calcular_salida(dependencias, secretos, scripts):
     total_scripts = len(scripts)
     total_general = total_dependencias + total_secretos + total_scripts
 
-    hay_criticos = (
-        total_secretos > 0
-        or any(item["riesgo"] == "alto" for item in scripts)
-        or any(item["severidad_maxima"] in ("HIGH", "CRITICAL") for item in dependencias)
-    )
+    hay_criticos = hay_hallazgos_criticos(dependencias, secretos, scripts)
 
     color_resumen = "red" if hay_criticos else "green"
     estado = "⚠ Se encontraron hallazgos críticos" if hay_criticos else "✓ Sin hallazgos críticos"

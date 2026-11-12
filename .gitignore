@@ -2,3 +2,8 @@ venv/
 __pycache__/
 *.pyc
 .env
+# El .env y .npmrc de proyecto_ejemplo son FALSOS y se versionan a propósito (material de la demo)
+!proyecto_ejemplo/.env
+!proyecto_ejemplo/.npmrc
+*.html
+*.zip
