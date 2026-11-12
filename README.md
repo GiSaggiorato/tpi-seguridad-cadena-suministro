@@ -89,11 +89,13 @@ tpi-seguridad-cadena-suministro/
 
 ## Caso de prueba incluido
 
-`proyecto_ejemplo/` contiene un `package.json` con una dependencia vulnerable real (`lodash@4.17.15`, con 5 CVEs conocidos en OSV) y un script `postinstall` malicioso de ejemplo, además de un `config.js` con tres tipos de secretos expuestos — pensado para demostrar las tres funcionalidades en una sola ejecución.
+`proyecto_ejemplo/` contiene:
+- Un `package.json` raíz con una dependencia vulnerable real (`lodash@4.17.15`, con 5 CVEs conocidos en OSV) y un script `postinstall` malicioso.
+- Un archivo `config.js` con tres tipos de secretos expuestos.
+- Una carpeta `node_modules/` con dependencias de ejemplo (incluyendo paquetes con *scope*) para demostrar la detección de scripts de instalación de alto riesgo en sub-paquetes.
 
 ## Próximos pasos
 
-- Extender el análisis de scripts de instalación a los `package.json` dentro de `node_modules/` (no solo el raíz del proyecto).
 - Ampliar la cobertura de patrones de detección de secretos.
 - Incorporar un proyecto de ejemplo más completo y un caso de estudio sobre un proyecto Node.js real (OWASP Juice Shop).
 - Permitir cargar el proyecto a analizar por archivo ZIP o URL de repositorio Git.
@@ -103,6 +105,5 @@ tpi-seguridad-cadena-suministro/
 ## Limitaciones conocidas
 
 - El análisis de dependencias y de scripts de instalación solo soporta proyectos npm (`package.json`); no analiza `requirements.txt` de Python en esta versión.
-- El análisis de scripts de instalación evalúa únicamente el `package.json` raíz del proyecto, no los de sus dependencias dentro de `node_modules/`.
 
 ---

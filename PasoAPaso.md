@@ -537,28 +537,26 @@ Se separa "qué patrones matchean" de "qué tan grave es" en dos funciones. Un s
 ### 6.4 — Función principal del módulo
 
 ```python
-def analizar_scripts_instalacion(ruta_proyecto):
+def _evaluar_scripts_de(datos_package_json, nombre_paquete):
     """
-    Lee el package.json del proyecto y evalúa los scripts de
-    instalación (preinstall, install, postinstall) en busca de
-    patrones de riesgo.
+    Dado el contenido ya leído de un package.json, evalúa sus scripts
+    de instalación y devuelve los hallazgos, etiquetados con el
+    nombre del paquete al que pertenecen.
     """
-    ruta_package_json = f"{ruta_proyecto}/package.json"
-
-    with open(ruta_package_json, "r", encoding="utf-8") as archivo:
-        datos = json.load(archivo)
-
-    scripts = datos.get("scripts", {})
+    scripts = datos_package_json.get("scripts", {})
     hallazgos = []
 
     for nombre_script, contenido in scripts.items():
         if nombre_script not in SCRIPTS_DE_INSTALACION:
+            continue
+        if not isinstance(contenido, str):
             continue
 
         riesgos = evaluar_riesgo_script(contenido)
 
         if riesgos:
             hallazgos.append({
+                "paquete": nombre_paquete,
                 "script": nombre_script,
                 "contenido": contenido,
                 "patrones_detectados": riesgos,
@@ -566,11 +564,65 @@ def analizar_scripts_instalacion(ruta_proyecto):
             })
 
     return hallazgos
+
+
+def encontrar_dependencias_directas(ruta_proyecto):
+    """
+    Devuelve una lista de (nombre_paquete, ruta_a_su_package_json)
+    por cada dependencia directa instalada en node_modules.
+    Soporta paquetes con scope (ej: @angular/core).
+    """
+    ruta_node_modules = os.path.join(ruta_proyecto, "node_modules")
+
+    if not os.path.isdir(ruta_node_modules):
+        return []
+
+    encontrados = []
+
+    for nombre in os.listdir(ruta_node_modules):
+        ruta_entrada = os.path.join(ruta_node_modules, nombre)
+
+        if not os.path.isdir(ruta_entrada):
+            continue
+
+        if nombre.startswith("@"):
+            for sub_nombre in os.listdir(ruta_entrada):
+                ruta_pkg = os.path.join(ruta_entrada, sub_nombre, "package.json")
+                if os.path.isfile(ruta_pkg):
+                    encontrados.append((f"{nombre}/{sub_nombre}", ruta_pkg))
+        else:
+            ruta_pkg = os.path.join(ruta_entrada, "package.json")
+            if os.path.isfile(ruta_pkg):
+                encontrados.append((nombre, ruta_pkg))
+
+    return encontrados
+
+
+def analizar_scripts_instalacion(ruta_proyecto):
+    """
+    Evalúa los scripts de instalación del proyecto raíz y de cada
+    dependencia directa instalada en node_modules.
+    """
+    hallazgos = []
+
+    ruta_package_json_raiz = os.path.join(ruta_proyecto, "package.json")
+    with open(ruta_package_json_raiz, "r", encoding="utf-8") as archivo:
+        datos_raiz = json.load(archivo)
+    hallazgos.extend(_evaluar_scripts_de(datos_raiz, "(proyecto raíz)"))
+
+    for nombre_paquete, ruta_pkg in encontrar_dependencias_directas(ruta_proyecto):
+        try:
+            with open(ruta_pkg, "r", encoding="utf-8") as archivo:
+                datos_dependencia = json.load(archivo)
+        except (json.JSONDecodeError, PermissionError, UnicodeDecodeError):
+            continue
+
+        hallazgos.extend(_evaluar_scripts_de(datos_dependencia, nombre_paquete))
+
+    return hallazgos
 ```
 
 Scripts como `test`, `build` o `start` no se ejecutan automáticamente al instalar, así que se ignoran — no son el vector de ataque que interesa.
-
-> **Limitación conocida (pendiente de resolver en la segunda etapa):** esta función solo analiza el `package.json` **raíz** del proyecto. La propuesta pide analizar *"el package.json de las dependencias directas"* — en un proyecto real, cada paquete dentro de `node_modules/` tiene su propio `package.json`, y ahí suele esconderse un script malicioso. Esta extensión es un pendiente obligatorio antes de la entrega final.
 
 ---
 
@@ -657,7 +709,8 @@ def mostrar_scripts_sospechosos(hallazgos):
         return
 
     tabla = Table(title="Scripts de instalación sospechosos")
-    tabla.add_column("Script", style="bold")
+    tabla.add_column("Paquete", style="bold")
+    tabla.add_column("Script")
     tabla.add_column("Riesgo")
     tabla.add_column("Patrones detectados")
     tabla.add_column("Contenido")
@@ -665,6 +718,7 @@ def mostrar_scripts_sospechosos(hallazgos):
     for item in hallazgos:
         color = COLOR_POR_RIESGO.get(item["riesgo"], "white")
         tabla.add_row(
+            item["paquete"],
             item["script"],
             f"[{color}]{item['riesgo']}[/{color}]",
             ", ".join(item["patrones_detectados"]),
@@ -797,6 +851,11 @@ if __name__ == "__main__":
 
 Se armó un proyecto de prueba (`proyecto_ejemplo/`) con las 3 condiciones a detectar, para validar el funcionamiento integrado y contar con material para la demo en vivo.
 
+**Estructura de dependencias en `node_modules`:**
+Para probar la nueva funcionalidad, se agregaron dos dependencias de ejemplo dentro de `node_modules/`:
+* `@org-falsa/paquete-con-scope/package.json`: simula un paquete con scope que contiene un script `install` malicioso usando `base64`.
+* `paquete-normal/package.json`: simula un paquete estándar con un script `preinstall` que intenta una descarga de red.
+
 **`proyecto_ejemplo/package.json`:**
 
 ```json
@@ -839,8 +898,8 @@ python main.py ./proyecto_ejemplo
 |---|---|
 | Dependencias vulnerables | `lodash 4.17.15` — 5 vulnerabilidades, severidad máxima HIGH |
 | Secretos expuestos | 3 hallazgos (API key, cadena de conexión, AWS key) |
-| Scripts sospechosos | 1 hallazgo — `postinstall`, riesgo alto, patrones "Descarga de red" y "Pipe a intérprete de comandos" |
-| **Resumen** | **5 hallazgos totales**, hallazgos críticos detectados, **código de salida 1** |
+| Scripts sospechosos | 3 hallazgos (`postinstall` en raíz, `install` en `@org-falsa/paquete-con-scope`, `preinstall` en `paquete-normal`) |
+| **Resumen** | **7 hallazgos totales**, hallazgos críticos detectados, **código de salida 1** |
 
 El resultado confirma que los tres módulos funcionan de forma integrada y que el código de salida simula correctamente el bloqueo de un pipeline de CI/CD.
 
@@ -855,5 +914,3 @@ El resultado confirma que los tres módulos funcionan de forma integrada y que e
 | `venv\Scripts\Activate.ps1` no se puede cargar: "la ejecución de scripts está deshabilitada" | Política de ejecución de PowerShell bloquea scripts `.ps1` sin firma | `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`. Se eligió `RemoteSigned` (no `Unrestricted`) porque permite scripts locales sin firma, pero sigue exigiendo firma digital para scripts descargados de internet — el balance correcto para una materia de seguridad |
 
 ---
-
-*Documento de desarrollo — Pasos 1 a 9 completados y verificados. Las mejoras acordadas para la entrega final se documentan en un archivo aparte.*
