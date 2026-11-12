@@ -2,7 +2,7 @@ import json
 import re
 import os
 
-SCRIPTS_DE_INSTALACION = {"preinstall", "install", "postinstall"}
+SCRIPTS_DE_INSTALACION = {"preinstall", "install", "postinstall", "prepare"}
 
 PATRONES_DE_RIESGO = {
     "Descarga de red": re.compile(r"\b(curl|wget|fetch|invoke-webrequest|iwr)\b", re.IGNORECASE),
@@ -48,6 +48,8 @@ def _evaluar_scripts_de(datos_package_json, nombre_paquete):
     nombre del paquete al que pertenecen.
     """
     scripts = datos_package_json.get("scripts", {})
+    if not isinstance(scripts, dict):
+        return []
     hallazgos = []
 
     for nombre_script, contenido in scripts.items():
@@ -112,6 +114,8 @@ def analizar_scripts_instalacion(ruta_proyecto):
     ruta_package_json_raiz = os.path.join(ruta_proyecto, "package.json")
     with open(ruta_package_json_raiz, "r", encoding="utf-8") as archivo:
         datos_raiz = json.load(archivo)
+        if not isinstance(datos_raiz, dict):
+            raise ValueError("package.json debe ser un objeto JSON")
     hallazgos.extend(_evaluar_scripts_de(datos_raiz, "(proyecto raíz)"))
 
     for nombre_paquete, ruta_pkg in encontrar_dependencias_directas(ruta_proyecto):

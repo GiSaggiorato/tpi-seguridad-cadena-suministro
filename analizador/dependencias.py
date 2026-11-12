@@ -14,6 +14,15 @@ def leer_dependencias_npm(ruta_proyecto):
 
     with open(ruta_package_json, "r", encoding="utf-8") as archivo:
         datos = json.load(archivo)
+        if not isinstance(datos, dict):
+            raise ValueError("package.json debe ser un objeto JSON")
+        dependencias = {}
+        
+        for clave in ("dependencies", "devDependencies"):
+            bloque = datos.get(clave, {})
+            if isinstance(bloque, dict):
+                dependencias.update(bloque)
+        return dependencias
 
     dependencias = {}
     dependencias.update(datos.get("dependencies", {}))
@@ -111,7 +120,11 @@ def analizar_dependencias_npm(ruta_proyecto, omitidas=None):
                 "version": version,
                 "cantidad": len(vulnerabilidades),
                 "ids": [v["id"] for v in vulnerabilidades],
-                "severidad_maxima": _severidad_mas_alta(severidades)
+                "severidad_maxima": (
+                    "CRITICAL"
+                    if any(v.get("id", "").startswith("MAL-") for v in vulnerabilidades)
+                    else _severidad_mas_alta(severidades)
+                ),
             })
 
     return hallazgos

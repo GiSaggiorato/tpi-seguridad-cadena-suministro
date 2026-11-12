@@ -31,7 +31,7 @@ __pycache__/
 *.html
 *.zip
 ```
-* **Justificación:** Evita subir al repositorio el entorno virtual, binarios compilados, reportes de prueba y eventuales archivos `.env` con credenciales.
+* **Justificación:** Evita subir al repositorio el entorno virtual, binarios compilados, reportes de prueba y archivos `.env` con credenciales reales.
 
 ---
 
@@ -44,9 +44,9 @@ requests>=2.31.0
 rich>=13.7.0
 ```
 
-* **`requests` vs. `urllib.request` / `httpx`:** `requests` permite realizar peticiones POST con JSON y manejo obligatorio de `timeout` de forma clara y legible. Se descartó `httpx` por no requerir asincronismo.
-* **`rich` vs. `colorama` + `tabulate`:** `rich` resuelve en una única dependencia auditada el renderizado de tablas, colores por severidad, paneles de resumen y prompts interactivos.
-* **Librería estándar de Python:** El parseo de CLI (`argparse`), expresiones regulares (`re`), archivos comprimidos (`zipfile`), carpetas temporales (`tempfile`), pruebas (`unittest`) y ventanas de selección de archivos (`tkinter`) se implementaron sin dependencias externas.
+* **`requests` vs. `urllib.request` / `httpx`:** `requests` permite realizar peticiones POST con JSON, verificación TLS por defecto y manejo obligatorio de `timeout` de forma clara y legible. Se descartó `httpx` por no requerir asincronismo.
+* **`rich` vs. `colorama` + `tabulate`:** `rich` resuelve en una única dependencia el renderizado de tablas, colores por severidad, paneles de resumen y prompts interactivos.
+* **Librería estándar de Python:** El parseo de CLI (`argparse`), expresiones regulares (`re`), archivos comprimidos (`zipfile`), carpetas temporales (`tempfile`), subprocesos (`subprocess`), escape HTML (`html`), pruebas (`unittest`) y diálogos de selección (`tkinter`) se resolvieron sin dependencias externas.
 
 ---
 
@@ -56,9 +56,9 @@ El código se organizó dentro del paquete `analizador/`, asignando una única r
 
 | Archivo | Responsabilidad principal |
 | :--- | :--- |
-| `analizador/dependencias.py` | Lectura de `package.json` / `node_modules` y consulta de CVEs en la API de OSV. |
-| `analizador/secretos.py` | Escaneo de archivos de texto mediante expresiones regulares y enmascaramiento de hallazgos. |
-| `analizador/scripts_npm.py` | Auditoría de scripts `preinstall`, `install` y `postinstall` en el proyecto raíz y en `node_modules/`. |
+| `analizador/dependencias.py` | Lectura de `package.json` / `node_modules` y consulta de vulnerabilidades en la API de OSV. |
+| `analizador/secretos.py` | Escaneo de archivos de texto mediante 20 expresiones regulares y enmascaramiento de hallazgos. |
+| `analizador/scripts_npm.py` | Auditoría de scripts de ciclo de vida en el proyecto raíz y en el primer nivel de `node_modules/`. |
 | `analizador/fuentes.py` | Extracción segura de archivos `.zip` y clonado temporal de repositorios Git remotos (`https://`). |
 | `analizador/reporte.py` | Tablas en consola con `rich`, cálculo de criticidad y retorno del código de salida para CI/CD. |
 | `analizador/reporte_html.py` | Generación de reporte HTML estático autónomo con escape anti-XSS y cabecera CSP. |
@@ -69,63 +69,65 @@ El código se organizó dentro del paquete `analizador/`, asignando una única r
 
 ## Paso 4: Módulo de Dependencias Vulnerables (`analizador/dependencias.py`)
 
-1. **Lectura y resolución de versión:** Combina `dependencies` y `devDependencies` del `package.json` raíz. Si el paquete está instalado en `node_modules/<paquete>/package.json`, prioriza esa versión exacta instalada (validando previamente con `os.path.realpath` que el nombre del paquete no contenga `..` para evitar *Path Traversal*).
-2. **Transparencia ante versiones no resolubles:** Si una versión está declarada como URL (`github:usuario/repo`), archivo (`file:...`), comodín (`*`) o rango compuesto (`||`), en lugar de fallar en silencio se agrega a la lista de `omitidas` y se informa en una tabla dedicada.
+1. **Lectura y resolución de versión:** Combina `dependencies` y `devDependencies` del `package.json` raíz (validando que el archivo y cada bloque sean objetos JSON válidos). Si el paquete está instalado en `node_modules/<paquete>/package.json`, prioriza esa versión exacta instalada (rechazando previamente nombres con `..`, `\` o `:` para evitar *Path Traversal*).
+2. **Transparencia ante versiones no resolubles o errores de red:** Si una versión está declarada con una especificación no resoluble a un número exacto (ej. `github:usuario/repo`, `file:...`, `*`, rangos con `||`) o si la consulta a OSV falla por red, se registra en la lista `omitidas` con su motivo y se informa en la tabla `"Dependencias no analizadas"`. En modo `--strict`, cualquier dependencia omitida provoca código de salida `3` (*fail-closed*).
 3. **Consulta a la API OSV (`https://api.osv.dev/v1/query`):**
-   * Se incluye `timeout=10` en `requests.post()` para evitar que una caída del servicio externo bloquee indefinidamente el pipeline (prevención de denegación de servicio por falta de timeout).
-   * Se calcula la severidad máxima del paquete (`CRITICAL` > `HIGH` > `MODERATE` > `LOW` > `DESCONOCIDA`) contemplando tanto el campo `database_specific.severity` como vectores CVSS.
+   * Se incluye `timeout=10` en `requests.post()` para evitar que una caída del servicio externo cuelgue indefinidamente el análisis.
+   * Se calcula la severidad máxima del paquete (`CRITICAL` > `HIGH` > `MODERATE` > `LOW` > `DESCONOCIDA`) leyendo `database_specific.severity`, y tratando automáticamente como `CRITICAL` cualquier aviso con prefijo `MAL-` (paquete reportado como malicioso en OSV).
 
 ---
 
 ## Paso 5: Módulo de Detección de Secretos (`analizador/secretos.py`)
 
-1. **Catálogo de 14 patrones curados:** Basados en reglas públicas de *Gitleaks*, cubriendo AWS (`AKIA`/`ASIA` y Secret Keys), Google API Keys (`AIza...`), GitHub Tokens (`ghp_`, `gho_`, `github_pat_`), GitLab (`glpat-`), Stripe (`sk_live_`/`sk_test_`), Slack Tokens y Webhooks, SendGrid, npm Access Tokens (`npm_...` y `_authToken` en `.npmrc`), Tokens JWT (`eyJ...`), Claves Privadas (`-----BEGIN ... PRIVATE KEY-----`), cadenas de conexión con credenciales (`mongodb://`, `postgres://`, `mysql://`, `redis://`) y contraseñas/API keys genéricas.
-2. **Defensa contra *ReDoS* (*Regular Expression Denial of Service*):** Se evitó el uso de cuantificadores anidados ambiguos y se trunca la evaluación de líneas a un máximo de 4096 caracteres para que archivos `.js` minificados no degraden el rendimiento.
-3. **Soporte de archivos de configuración ocultos:** Dado que `os.path.splitext(".env")` devuelve extensión vacía en Python, se verifica explícitamente el conjunto `NOMBRES_CON_EXTENSION_IMPLICITA` (`.env`, `.env.local`, `.npmrc`, etc.).
-4. **Enmascaramiento (*Data Masking*):** La función `_enmascarar()` conserva únicamente los primeros 4 caracteres del hallazgo seguidos de `************`, evitando exponer secretos reales en la terminal o en los reportes exportados.
+1. **Catálogo de 20 patrones curados:** Basados en reglas públicas de *Gitleaks*, cubriendo AWS Access Keys (`AKIA`/`ASIA`/`ABIA`/`ACCA`), Google API Keys (`AIza...`), DigitalOcean (`dop_v1_...`), GitHub Tokens (`ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` y `github_pat_`), GitLab (`glpat-`), npm Access Tokens (`npm_...` y `_authToken` en `.npmrc`), PyPI Upload Tokens, Slack Tokens y Webhooks, Stripe Keys (`sk_`/`rk_`), Twilio, SendGrid, Telegram Bot Tokens, Claves Privadas (`-----BEGIN ... PRIVATE KEY-----`), Tokens JWT (`eyJ...`), cadenas de conexión con credenciales (`mongodb://`, `postgres://`, `mysql://`, `redis://`, `amqp://`) y asignaciones de API keys y contraseñas en código.
+2. **Defensa contra *ReDoS* y archivos gigantes:** Los patrones utilizan prefijos literales y longitudes acotadas sin cuantificadores anidados ambiguos. Además, se ignoran archivos mayores a 2 MB (`TAMANO_MAXIMO_ARCHIVO`), líneas que superen los 10.000 caracteres (`LARGO_MAXIMO_LINEA`, típico de bundles JS minificados) y enlaces simbólicos (`os.path.islink`).
+3. **Soporte de archivos sin extensión:** Dado que `os.path.splitext(".env")` devuelve extensión vacía en Python, se comprueba explícitamente el conjunto `NOMBRES_A_ANALIZAR` (`.env`, `.npmrc`, `.pypirc`, `.netrc`, `id_rsa`, `id_ecdsa`, `id_ed25519`, `credentials`, `dockerfile`).
+4. **Enmascaramiento (*Data Masking*):** La función `enmascarar()` muestra solo los primeros 4 caracteres del secreto seguidos de asteriscos (`sk_t************`), evitando que la consola o el reporte HTML se conviertan en una fuente de fuga de credenciales.
 
 ---
 
 ## Paso 6: Módulo de Scripts de Instalación (`analizador/scripts_npm.py`)
 
-1. **Alcance completo (Raíz + `node_modules`):** Evalúa los hooks `preinstall`, `install` y `postinstall` tanto en el `package.json` del proyecto como en cada dependencia directa dentro de `node_modules/`, soportando paquetes agrupados bajo un *scope* (`node_modules/@scope/paquete/package.json`).
-2. **Patrones heurísticos de riesgo:**
-   * Descarga de red (`curl`, `wget`, `fetch`, `Invoke-WebRequest`).
-   * Ejecución de código dinámico (`eval(`).
-   * Pipe a intérprete de comandos (`| bash`, `| sh`, `| powershell`, `| cmd`).
-   * Cambio de permisos de ejecución (`chmod +x`).
-   * Codificación u ofuscación (`base64`, `atob`, `Buffer.from`).
-3. **Clasificación de severidad:** Un script con 2 o más indicadores combinados (por ejemplo, descarga con `curl` + pipe a `bash`, o `eval` + `Buffer.from(..., 'base64')`) se clasifica como riesgo **alto**; con 1 indicador (ej. solo `wget`), como riesgo **medio**.
+1. **Alcance (Raíz + primer nivel de `node_modules`):** Evalúa los hooks de ejecución automática (`preinstall`, `install`, `postinstall`, `prepare`) tanto en el `package.json` del proyecto como en los paquetes presentes en el primer nivel de `node_modules/`, incluyendo paquetes con *scope* (`node_modules/@scope/paquete/package.json`).
+2. **Patrones de riesgo detectados:**
+   * Descarga de red (`curl`, `wget`, `fetch`, `Invoke-WebRequest`, `iwr`).
+   * Ejecución de código dinámico (`eval(`, `Function(`).
+   * Pipe a intérprete de comandos (`| bash`, `| sh`, `| zsh`, `| cmd`, `| powershell`, `| pwsh`, `| node`, `| python`).
+   * Ejecución de binario o cambio de permisos (`chmod +x` o modos octales).
+   * Codificación/ofuscación (`base64`, `atob`, `Buffer.from`).
+   * Shell reversa / redirección de red (`nc`, `netcat`, `/dev/tcp/`, `bash -i`).
+   * Ejecución de subprocesos en Node inline (`node -e ... child_process`).
+   * Acceso a archivos o variables sensibles (`.ssh/`, `/etc/passwd`, `/etc/shadow`, `.npmrc`, `process.env`).
+3. **Clasificación de severidad:** Un script con 2 o más patrones combinados se clasifica como riesgo **alto**; con 1 patrón, como riesgo **medio**.
 
 ---
 
 ## Paso 7: Orígenes Externos Seguros (`analizador/fuentes.py`)
 
-Para permitir auditar proyectos sin copiarlos manualmente dentro del repositorio, se implementaron dos gestores de contexto (`@contextmanager`) que trabajan sobre `tempfile.TemporaryDirectory()` (eliminando todo rastro al finalizar):
+Para auditar proyectos comprimidos o remotos sin ensuciar el directorio de trabajo, se implementaron dos gestores de contexto sobre `tempfile.TemporaryDirectory()`:
 
 1. **`proyecto_desde_zip`:**
    * Verifica que el archivo sea un ZIP válido.
-   * **Anti *Zip Bomb*:** Rechaza archivos con más de 10.000 entradas o cuyo tamaño descomprimido supere los 200 MB (controlando tanto las cabeceras declaradas como los bytes reales escritos en disco).
-   * **Anti *Zip Slip* (Path Traversal):** Comprueba mediante `os.path.realpath` que ninguna entrada del ZIP intente escribir fuera de la carpeta temporal (ej. `../../archivo`) y rechaza enlaces simbólicos (*symlinks*).
+   * **Anti *Zip Bomb*:** Limita la extracción a un máximo de 50.000 archivos y 500 MB declarados en total.
+   * **Anti *Zip Slip* (Path Traversal):** Rechaza entradas con rutas absolutas, letras de unidad o segmentos `..`, y comprueba con `os.path.realpath` que la ruta resultante quede contenida dentro del directorio temporal. Además, `extractall` en Python no materializa enlaces simbólicos hacia el exterior.
 2. **`proyecto_desde_git`:**
-   * **Validación de URL:** Exige esquema `https://`, host válido y rechaza valores con espacios o que comiencen con `-` (prevención de *Argument Injection* en Git).
-   * **Clonado seguro:** Ejecuta `git clone --depth 1 --no-submodules` mediante `subprocess.run` con lista de argumentos (`shell=False`), `GIT_TERMINAL_PROMPT=0` y `timeout=120`.
+   * **Validación estricta de URL:** Exige esquema `https://` mediante expresión regular, rechazando credenciales en la URL (`usuario:clave@`), parámetros `?query`, `#fragmentos` o valores que comiencen con `-` (prevención de *Argument Injection*).
+   * **Clonado endurecido:** Ejecuta `git -c core.symlinks=false -c protocol.allow=never clone --depth 1 --no-tags -- <url> <destino>` con `subprocess.run(..., shell=False)`, `GIT_TERMINAL_PROMPT=0` y `timeout=180` segundos.
 
 ---
 
 ## Paso 8: Reporte en Consola, Exportación HTML y Modo Interactivo (`reporte.py`, `reporte_html.py`, `main.py`)
 
-1. **Consola (`rich`) y bloqueo de CI/CD:** Presenta tablas coloreadas por severidad y un panel resumen. Si existen secretos expuestos, scripts de riesgo `alto` o dependencias `HIGH`/`CRITICAL`, devuelve código de salida `1`.
-2. **Reporte HTML autónomo (`--html`):** Genera un archivo HTML estático con soporte automático para modo claro/oscuro, escapando todos los textos con `html.escape()` (anti-XSS) e incluyendo una directiva `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
-3. **Modo Interactivo (`python main.py` sin argumentos):** Guía al usuario mediante un menú numerado y abre el diálogo nativo de Windows (`tkinter.filedialog`) para seleccionar carpetas o archivos `.zip`, validando entradas vacías o rutas inexistentes sin exponer trazas de error (*tracebacks*).
+1. **Consola (`rich`) y bloqueo de CI/CD:** Presenta tablas coloreadas por severidad y un panel resumen. Si existen secretos expuestos, scripts de riesgo `alto` o dependencias `HIGH`/`CRITICAL` (incluyendo avisos `MAL-`), devuelve código de salida `1`.
+2. **Reporte HTML autónomo (`--html`):** Genera un archivo HTML estático con soporte para modo claro/oscuro, escapando todos los valores dinámicos con `html.escape()` (anti-XSS) e incluyendo la política `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
+3. **Modo Interactivo (`python main.py` sin argumentos):** Guía al usuario mediante un menú numerado y abre el diálogo nativo de Windows (`tkinter.filedialog`) para elegir carpetas o archivos `.zip`.
 
 ---
 
-## Paso 9: Resolución de Problemas Frecuentes Durante la Configuración
+## Paso 9: Limitaciones Conocidas y Trabajo Futuro
 
-| Problema encontrado | Causa | Solución aplicada |
-| :--- | :--- | :--- |
-| `Python was not found` en Windows | Alias de la Microsoft Store sin intérprete instalado | Instalación de CPython oficial mediante Python Install Manager y actualización del `PATH`. |
-| Advertencia de límite de 260 caracteres en Windows | Restricción histórica de rutas `MAX_PATH` en Windows | Habilitación de soporte de rutas largas en el instalador para evitar fallos en subcarpetas de paquetes. |
-| `Activate.ps1 ... ejecución de scripts deshabilitada` | Política restrictiva por defecto de PowerShell | Ejecución de `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`. |
-| `git : El término 'git' no se reconoce...` tras instalar Git | La terminal abierta en VS Code conserva el `PATH` previo a la instalación | Reiniciar completamente VS Code para que herede la variable de entorno `PATH` actualizada. |
+Para mantener un alcance acotado, auditable y alineado a la propuesta aprobada, se documentan las siguientes limitaciones y líneas de extensión futura:
+
+* **Análisis de `package-lock.json` y dependencias transitivas:** Cuando no existe la carpeta `node_modules/`, la versión se toma del `package.json` (limpiando prefijos `^` y `~`). Incorporar la lectura de `package-lock.json` permitiría auditar el árbol completo de dependencias transitivas con versiones exactas.
+* **Consultas por lotes a OSV (`/v1/querybatch`):** Actualmente se realiza una petición HTTP por dependencia; el endpoint batch de OSV permitiría reducir la latencia en proyectos con cientos de paquetes.
+* **Soporte para `requirements.txt` (Ecosistema PyPI):** Extender el parser para leer manifiestos de Python y consultar OSV con `"ecosystem": "PyPI"`.

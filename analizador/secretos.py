@@ -70,14 +70,13 @@ LARGO_MAXIMO_LINEA = 10_000               # evita líneas gigantes (JS minificad
 
 
 def recorrer_archivos(ruta_proyecto):
-    """
-    Recorre los archivos del proyecto, saltando carpetas que no nos interesa
-    analizar (dependencias instaladas, control de versiones, compilados).
-    """
     for carpeta_actual, subcarpetas, archivos in os.walk(ruta_proyecto):
         subcarpetas[:] = [c for c in subcarpetas if c not in CARPETAS_A_IGNORAR]
         for nombre_archivo in archivos:
-            yield os.path.join(carpeta_actual, nombre_archivo)
+            ruta = os.path.join(carpeta_actual, nombre_archivo)
+            if os.path.islink(ruta):
+                continue
+            yield ruta
 
 
 def _debe_analizarse(ruta_archivo):

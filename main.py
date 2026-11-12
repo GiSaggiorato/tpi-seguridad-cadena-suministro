@@ -37,6 +37,8 @@ def crear_parser_argumentos():
                         help="Analizar un repositorio Git público por URL https:// (se clona en una carpeta temporal)")
     parser.add_argument("--html", metavar="ARCHIVO.html",
                         help="Además de la salida en consola, exportar el reporte a un archivo HTML")
+    parser.add_argument("--strict", action="store_true",
+                        help="Devuelve código 3 si alguna dependencia no pudo analizarse (fail-closed)")
     return parser
 
 
@@ -186,7 +188,7 @@ def ejecutar_modo_interactivo():
     return argumentos
 
 
-def analizar_proyecto(ruta_proyecto, origen_mostrado, ruta_html=None):
+def analizar_proyecto(ruta_proyecto, origen_mostrado, ruta_html=None, estricto=False):
     """Ejecuta los tres módulos sobre una carpeta y devuelve el código de salida."""
     if not ruta_proyecto or not os.path.isdir(ruta_proyecto):
         raise FuenteInvalidaError(f"La carpeta del proyecto no existe o no es válida: '{origen_mostrado}'")
@@ -213,6 +215,10 @@ def analizar_proyecto(ruta_proyecto, origen_mostrado, ruta_html=None):
     mostrar_scripts_sospechosos(scripts)
 
     codigo_salida = mostrar_resumen_y_calcular_salida(dependencias, secretos, scripts)
+
+    if estricto and omitidas and codigo_salida == 0:
+        console.print("[bold red]✗ Modo estricto:[/bold red] hay dependencias sin analizar.")
+        codigo_salida = 3
 
     if ruta_html:
         try:
@@ -247,18 +253,21 @@ def main():
     try:
         if argumentos.zip:
             with proyecto_desde_zip(argumentos.zip) as carpeta:
-                codigo = analizar_proyecto(carpeta, argumentos.zip, argumentos.html)
+                codigo = analizar_proyecto(carpeta, argumentos.zip, argumentos.html, estricto=getattr(argumentos, "strict", False))
         elif argumentos.git_url:
             with proyecto_desde_git(argumentos.git_url) as carpeta:
-                codigo = analizar_proyecto(carpeta, argumentos.git_url, argumentos.html)
+                codigo = analizar_proyecto(carpeta, argumentos.git_url, argumentos.html, estricto=getattr(argumentos, "strict", False))
         else:
-            codigo = analizar_proyecto(argumentos.ruta, argumentos.ruta, argumentos.html)
+            codigo = analizar_proyecto(argumentos.ruta, argumentos.ruta, argumentos.html, estricto=getattr(argumentos, "strict", False))
 
         if getattr(argumentos, "abrir_html", False) and argumentos.html and os.path.isfile(argumentos.html):
             webbrowser.open("file://" + os.path.realpath(argumentos.html))
 
     except FuenteInvalidaError as error:
         console.print(f"[bold red]✗ Error:[/bold red] {error}")
+        sys.exit(2)
+    except ValueError as error:
+        console.print(f"[bold red]✗ Error en manifiesto del proyecto:[/bold red] {error}")
         sys.exit(2)
     except KeyboardInterrupt:
         print("\nOperación interrumpida por el usuario.")
