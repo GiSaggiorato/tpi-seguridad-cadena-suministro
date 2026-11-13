@@ -1,3 +1,10 @@
+"""
+SECRETOS
+Busca patrones de texto (regex) que correspondan a claves o tokens hardcodeados directamente en el código fuente.
+re.compile traduce la regex a instrucciones de procesador una sola vez al inicio para evitar repetir la traducción por cada línea de código que se escanea.
+Es eficiente para tokens con formato estándar (JWT, AWS), pero no detectan credenciales caóticas sin patrón fijo.
+"""
+
 import re
 import os
 
@@ -17,6 +24,8 @@ def recorrer_archivos(ruta_proyecto):
     Recorre todos los archivos de texto del proyecto, saltando carpetas
     que no nos interesa analizar (dependencias instaladas, control de
     versiones, archivos compilados).
+    Utiliza yield para funcionar como un generador, entregando un archivo 
+    a la vez en lugar de cargar todo en memoria.
     """
     for carpeta_actual, subcarpetas, archivos in os.walk(ruta_proyecto):
         subcarpetas[:] = [c for c in subcarpetas if c not in CARPETAS_A_IGNORAR]
@@ -28,8 +37,11 @@ EXTENSIONES_A_ANALIZAR = {".js", ".ts", ".py", ".json", ".env", ".yml", ".yaml",
 
 def buscar_secretos_en_archivo(ruta_archivo):
     """
-    Abre un archivo de texto y busca todos los patrones de secretos.
+    Abre un archivo de texto filtrando por extensión y busca todos los
+    patrones de secretos. Fuerza UTF-8 e ignora errores de codificación.
+    Lee línea por línea con enumerate y cruza cada línea contra los 6 patrones regex.
     Devuelve una lista de hallazgos con el tipo y el número de línea.
+    Maneja permisos denegados o archivos corruptos silenciosamente con try-except.
     """
     _, extension = os.path.splitext(ruta_archivo)
     if extension not in EXTENSIONES_A_ANALIZAR:
@@ -54,8 +66,10 @@ def buscar_secretos_en_archivo(ruta_archivo):
 
 def analizar_secretos(ruta_proyecto):
     """
-    Función principal: recorre todo el proyecto y devuelve todos los
-    secretos potenciales encontrados.
+    Función principal que recorre todo el proyecto.
+    Llama al generador de archivos, procesa cada uno con la función
+    anterior y acumula todos los hallazgos en una única lista con .extend().
+    Devuelve todos los secretos potenciales encontrados.
     """
     todos_los_hallazgos = []
 
