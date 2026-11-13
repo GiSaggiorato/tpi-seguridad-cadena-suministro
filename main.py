@@ -1,5 +1,5 @@
 """
-MAIN
+MAIN: Coordinación de módulos
 Cordina a los demás módulos, les pasa la información y maneja posibles errores básicos.
 """
 

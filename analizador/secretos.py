@@ -1,5 +1,5 @@
 """
-SECRETOS
+SECRETOS: Análisis Estático de Credenciales
 Busca patrones de texto (regex) que correspondan a claves o tokens hardcodeados directamente en el código fuente.
 re.compile traduce la regex a instrucciones de procesador una sola vez al inicio para evitar repetir la traducción por cada línea de código que se escanea.
 Es eficiente para tokens con formato estándar (JWT, AWS), pero no detectan credenciales caóticas sin patrón fijo.

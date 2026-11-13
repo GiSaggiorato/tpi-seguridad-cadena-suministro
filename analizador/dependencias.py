@@ -1,5 +1,5 @@
 """
-DEPENDENCIAS
+DEPENDENCIAS: Análisis de Vulnerabilidades
 Extrae las dependencias declaradas y contrastarlas contra la base de datos de OSV (Open Source Vulnerabilities).
 """
 
