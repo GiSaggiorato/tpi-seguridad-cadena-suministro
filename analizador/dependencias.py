@@ -55,7 +55,7 @@ def consultar_vulnerabilidades(nombre_paquete, version, ecosistema="npm"):
 
 def analizar_dependencias_npm(ruta_proyecto):
     """
-    Función principal del módulo: itera sobre cada dependencias del proyecto, 
+    Función principal del módulo: itera sobre cada dependencia del proyecto, 
     devuelve solo aquellas que tienen vulnerabilidades conocidas y arma un
     diccionario con: nombre, versión, cantidad de CVEs, sus IDs y la severidad más alta.
     """
@@ -88,7 +88,7 @@ def _severidad_mas_alta(lista_severidades):
     traduce los textos a un valor numérico para poder usar
     la función max() de Python y devolver la etiqueta más
     grave encontrada en un paquete.
-    
+
     El guion bajo al principio del nombre es una convención de Python
     para indicar "función interna de este módulo, no pensada para
     usarse desde afuera".
