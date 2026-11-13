@@ -1,3 +1,8 @@
+"""
+DEPENDENCIAS
+Extrae las dependencias declaradas y contrastarlas contra la base de datos de OSV (Open Source Vulnerabilities).
+"""
+
 import json
 import requests
 
@@ -7,6 +12,7 @@ def leer_dependencias_npm(ruta_proyecto):
     """
     Lee el archivo package.json del proyecto y devuelve un diccionario
     con el nombre de cada dependencia y su versión declarada.
+    Une en un solo diccionario las dependencies (producción) y devDependencies (desarrollo)
     """
     ruta_package_json = f"{ruta_proyecto}/package.json"
 
@@ -22,15 +28,16 @@ def leer_dependencias_npm(ruta_proyecto):
 def limpiar_version(version):
     """
     Quita los símbolos de rango que usa npm (^, ~, >=, etc.) para
-    quedarnos con el número de versión exacto que necesita OSV.
+    quedarnos con el número de versión exacto que necesita OSV (ej. 4.17.15).
     """
     caracteres_a_quitar = "^~>=< "
     return version.lstrip(caracteres_a_quitar)
 
 def consultar_vulnerabilidades(nombre_paquete, version, ecosistema="npm"):
     """
-    Consulta la API de OSV por un paquete y versión puntuales.
+    Arma el JSON y consulta la API de OSV (api.osv.dev) por un paquete y versión puntuales.
     Devuelve la lista de vulnerabilidades encontradas (vacía si no tiene).
+    Aplica timeout para evitar bloqueos por denegación de servicio si la API no responde.
     """
     cuerpo_pedido = {
         "package": {
@@ -48,8 +55,9 @@ def consultar_vulnerabilidades(nombre_paquete, version, ecosistema="npm"):
 
 def analizar_dependencias_npm(ruta_proyecto):
     """
-    Función principal del módulo: lee las dependencias del proyecto y
-    devuelve solo aquellas que tienen vulnerabilidades conocidas.
+    Función principal del módulo: itera sobre cada dependencias del proyecto, 
+    devuelve solo aquellas que tienen vulnerabilidades conocidas y arma un
+    diccionario con: nombre, versión, cantidad de CVEs, sus IDs y la severidad más alta.
     """
     dependencias = leer_dependencias_npm(ruta_proyecto)
     hallazgos = []
@@ -76,7 +84,11 @@ def analizar_dependencias_npm(ruta_proyecto):
 
 def _severidad_mas_alta(lista_severidades):
     """
-    Dada una lista de severidades (texto), devuelve la más grave.
+    Dada una lista de severidades ("CRITICAL", "HIGH", etc.)
+    traduce los textos a un valor numérico para poder usar
+    la función max() de Python y devolver la etiqueta más
+    grave encontrada en un paquete.
+    
     El guion bajo al principio del nombre es una convención de Python
     para indicar "función interna de este módulo, no pensada para
     usarse desde afuera".
