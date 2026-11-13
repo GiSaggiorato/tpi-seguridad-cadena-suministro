@@ -1,0 +1,14 @@
+{
+  "name": "proyecto-limpio",
+  "version": "1.0.0",
+  "description": "Proyecto LIMPIO de contraste: dependencias actualizadas, sin secretos y sin scripts de instalacion peligrosos.",
+  "main": "src/app.js",
+  "dependencies": {
+    "express": "5.2.1"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "echo \"sin tests\"",
+    "postinstall": "node scripts/verificar-entorno.js"
+  }
+}

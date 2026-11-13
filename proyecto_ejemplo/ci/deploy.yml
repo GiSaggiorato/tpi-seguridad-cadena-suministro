@@ -1,0 +1,6 @@
+# Pipeline de despliegue con la contrasena escrita en texto plano
+name: deploy
+steps:
+  - run: ./desplegar.sh
+    env:
+      pwd: "deploy-secreto-2024"

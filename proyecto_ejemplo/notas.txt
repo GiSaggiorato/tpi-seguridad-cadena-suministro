@@ -1,0 +1,4 @@
+Notas del equipo: clave privada del servidor pegada aca "para no perderla".
+-----BEGIN RSA PRIVATE KEY-----
+CLAVE-FALSA-SOLO-PARA-DEMO-NO-ES-UNA-CLAVE-REAL
+-----END RSA PRIVATE KEY-----
