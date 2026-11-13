@@ -1,3 +1,8 @@
+"""
+REPORTE: UI y Pipeline
+Convierte las estructuras de datos de Python en una salida de consola amigable e informativa utilizando la librería rich.
+"""
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -16,6 +21,12 @@ COLOR_POR_RIESGO = {
 }
 
 def mostrar_dependencias_vulnerables(hallazgos):
+    """
+    Recibe la lista de dependencias vulnerables encontradas.
+    Si está vacía, imprime un mensaje de éxito en verde.
+    De lo contrario, construye y renderiza una tabla formateada con rich,
+    mapeando los colores correspondientes según la severidad máxima de OSV.
+    """
     if not hallazgos:
         console.print("[bold green]✓[/bold green] No se encontraron dependencias con vulnerabilidades conocidas.\n")
         return
@@ -41,6 +52,12 @@ def mostrar_dependencias_vulnerables(hallazgos):
     console.print()
 
 def mostrar_secretos_expuestos(hallazgos):
+    """
+    Recibe la lista de credenciales o secretos hardcodeados detectados.
+    Si está vacía, imprime un aviso de éxito.
+    Caso contrario, dibuja una tabla indicando el archivo afectado,
+    el número de línea y el tipo de secreto expuesto.
+    """
     if not hallazgos:
         console.print("[bold green]✓[/bold green] No se encontraron secretos expuestos.\n")
         return
@@ -61,6 +78,12 @@ def mostrar_secretos_expuestos(hallazgos):
     console.print()
 
 def mostrar_scripts_sospechosos(hallazgos):
+    """
+    Recibe la lista de scripts de ciclo de vida maliciosos o sospechosos.
+    Si la lista está limpia, muestra una marca de verificación verde.
+    Si hay hallazgos, renderiza una tabla detallando el paquete, el hook (ej. postinstall),
+    el nivel de riesgo con su color, los patrones detectados y el contenido del script.
+    """
     if not hallazgos:
         console.print("[bold green]✓[/bold green] No se encontraron scripts de instalación sospechosos.\n")
         return
@@ -87,9 +110,14 @@ def mostrar_scripts_sospechosos(hallazgos):
 
 def mostrar_resumen_y_calcular_salida(dependencias, secretos, scripts):
     """
-    Muestra un panel resumen con la cantidad total de hallazgos y
-    devuelve el código de salida que debería usar el programa:
-    0 si no hay hallazgos críticos, 1 si los hay.
+    Consolida los resultados de los tres módulos analíticos, calcula métricas totales
+    y evalúa si el proyecto se encuentra en estado crítico bajo los siguientes criterios:
+      1. Presencia de secretos expuestos (> 0).
+      2. Scripts de instalación con riesgo 'alto'.
+      3. Dependencias con severidad máxima 'HIGH' o 'CRITICAL'.
+
+    Renderiza un panel final con alertas visuales (rojo si falla, verde si está limpio)
+    y devuelve un código de salida (exit code): 1 para bloquear pipelines de CI/CD, 0 en caso de éxito.
     """
     total_dependencias = len(dependencias)
     total_secretos = len(secretos)
