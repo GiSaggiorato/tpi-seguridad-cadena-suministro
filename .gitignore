@@ -1,4 +1,4 @@
 venv/
 __pycache__/
 *.pyc
-.env
+documentacion_entrega/demo.mp4
